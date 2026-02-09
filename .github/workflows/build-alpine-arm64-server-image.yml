@@ -308,28 +308,35 @@ jobs:
           ln -sf /builder ${{ github.workspace }}/build
           ln -sf ${{ github.workspace }}/build-armbian build-armbian
 
-      - name: Download latest Alpine minirootfs for selected release
+      - name: Download latest minirootfs from latest-stable
         working-directory: /builder/tmp
         run: |
-          # 获取目录列表并提取最新 alpine-minirootfs-3.23.*-aarch64.tar.gz
-          if [[ "${{ inputs.alpine_release }}" == "edge" ]]; then
-            MINI_VERSION="edge"
-            MINI_FILE="alpine-minirootfs-edge-${{ env.ALPINE_ARCH }}.tar.gz"
-          else
-            # 对于 v3.23 等稳定版，找最新 patch
-            INDEX=$(curl -s "https://dl-cdn.alpinelinux.org/alpine/${{ inputs.alpine_release }}/releases/${{ env.ALPINE_ARCH }}/")
-            MINI_FILE=$(echo "$INDEX" | grep -oP 'alpine-minirootfs-3\.23\.[0-9]+-aarch64\.tar\.gz' | sort -V | tail -1)
-            if [[ -z "$MINI_FILE" ]]; then
-              echo "Error: Could not find minirootfs file in directory"
-              exit 1
-            fi
+          # latest-stable 指向当前稳定分支 (v3.23)
+          DIR_URL="https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/aarch64/"
+          
+          # 获取目录 HTML，提取所有 alpine-minirootfs-3.23.*-aarch64.tar.gz 文件名
+          INDEX=$(curl -s --fail "${DIR_URL}")
+          if [[ -z "$INDEX" ]]; then
+            echo "Error: Failed to fetch directory listing"
+            exit 1
           fi
-
-          ALPINE_URL="https://dl-cdn.alpinelinux.org/alpine/${{ inputs.alpine_release }}/releases/${{ env.ALPINE_ARCH }}/${MINI_FILE}"
+          
+          # 提取文件名，排序取最新（版本号自然排序）
+          MINI_FILE=$(echo "$INDEX" | grep -oP 'alpine-minirootfs-3\.[0-9]+\.[0-9]+-aarch64\.tar\.gz' | sort -V | tail -1)
+          
+          if [[ -z "$MINI_FILE" ]]; then
+            echo "Error: No alpine-minirootfs file found in latest-stable"
+            exit 1
+          fi
+          
+          ALPINE_URL="${DIR_URL}${MINI_FILE}"
+          echo "Detected latest: $MINI_FILE"
           echo "Downloading: $ALPINE_URL"
-          wget -q --show-progress "${ALPINE_URL}" -O alpine-minirootfs.tar.gz
+          
+          wget --show-progress "${ALPINE_URL}" -O alpine-minirootfs.tar.gz || exit 1
           mkdir -p rootfs
           tar -xzf alpine-minirootfs.tar.gz -C rootfs/
+          ls -lh rootfs/
 
       - name: Configure Alpine rootfs (chroot)
         working-directory: /builder/tmp
