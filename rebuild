@@ -1051,6 +1051,10 @@ refactor_rootfs() {
         sed -i "s|^FORCE_UBOOT_UPDATE=.*|FORCE_UBOOT_UPDATE=\"no\"|g" ${armbian_release_file}
     }
 
+    # Write module name into the system module load list
+    mkdir -p etc/modules-load.d
+    echo "tcp_bbr" >>etc/modules-load.d/ophub-load-list.conf
+
     # Add custom startup script
     custom_startup_script="etc/custom_service/start_service.sh"
     [[ -x "${custom_startup_script}" && -f "etc/rc.local" ]] && {
@@ -1170,6 +1174,7 @@ refactor_rootfs() {
     echo "KERNEL_TAGS='${conf_kernel_tags}'" >>${ophub_release_file}
     echo "KERNEL_VERSION='${kernel}'" >>${ophub_release_file}
     echo "KERNEL_BACKUP='yes'" >>${ophub_release_file}
+    echo "DOWNLOAD_TYPE='tar'" >>${ophub_release_file}
     echo "BOOT_CONF='${BOOT_CONF}'" >>${ophub_release_file}
     echo "ROOTFS_TYPE='${rootfs_type}'" >>${ophub_release_file}
     echo "DISK_TYPE='usb'" >>${ophub_release_file}

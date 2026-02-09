@@ -32,6 +32,8 @@ on:
           - alark35-3500
           - anas3035
           - aio-3399b
+          - aio-3399c
+          - aio-3399c-ai
           - bdkj-bd-one
           - bdy-g18-pro
           - beikeyun
@@ -47,6 +49,7 @@ on:
           - eaidk-610
           - emb3531
           - fine3399
+          - firefly-jd4
           - firefly-rk3399
           - fmx1-pro
           - fmx1-pro-b
@@ -86,6 +89,7 @@ on:
           - r68s
           - renegade-rk3328
           - rk3318-box
+          - rock-5-itx
           - rock5b
           - rock5c
           - ruisen-box
@@ -212,10 +216,10 @@ on:
           - 6.12.y
           - 6.18.y
           - 5.10.y_5.15.y
-          - 5.15.y_6.1.y
-          - 6.1.y_6.12.y
           - 6.1.y_6.6.y
-          - 6.6.y_6.12.y
+          - 6.12.y_6.18.y
+          - 6.1.y_6.12.y
+          - 6.1.y_6.18.y
       auto_kernel:
         description: "Auto use the latest kernel."
         required: false
