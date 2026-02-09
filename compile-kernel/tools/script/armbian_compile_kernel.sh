@@ -565,7 +565,7 @@ compile_env() {
     echo -e "${STEPS} Start checking local compilation environments."
 
     # Get kernel output name
-    kernel_outname="${kernel_version}${custom_name}"
+    kernel_outname="${kernel_version}"
     echo -e "${INFO} Compile kernel output name [ ${kernel_outname} ]. \n"
 
     # Create a temp directory
