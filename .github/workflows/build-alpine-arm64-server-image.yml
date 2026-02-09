@@ -1,0 +1,49 @@
+name: Build Alpine arm64 server image for Amlogic
+
+on:
+  workflow_dispatch:
+    inputs:
+      armbian_board:
+        description: "Select device board"
+        required: false
+        default: "s905x3"
+        type: choice
+        options: [all, s905x3, s905x2, s912, ...]  # 可从原 workflow 复制选项
+      kernel_version:
+        description: "Kernel version"
+        default: "6.1.y"
+      rootfs_type:
+        default: "ext4"
+        type: choice
+        options: ["ext4", "btrfs"]
+      auto_kernel:
+        default: true
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support debootstrap \
+            dosfstools parted fdisk e2fsprogs btrfs-progs wget tar
+
+      - name: Build Alpine image
+        run: |
+          sudo chmod +x rebuild-alpine.sh
+          sudo ./rebuild-alpine.sh \
+            -b "${{ inputs.armbian_board }}" \
+            -k "${{ inputs.kernel_version }}" \
+            -t "${{ inputs.rootfs_type }}" \
+            -a "${{ inputs.auto_kernel }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpine-amlogic-image
+          path: build/output/images/*.img*
