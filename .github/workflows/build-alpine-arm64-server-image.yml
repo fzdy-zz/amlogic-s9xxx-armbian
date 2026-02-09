@@ -341,63 +341,97 @@ jobs:
       - name: Configure Alpine rootfs (chroot)
         working-directory: /builder/tmp
         run: |
+          # Mount essential filesystems
           sudo mount --bind /dev      rootfs/dev     || true
           sudo mount --bind /proc     rootfs/proc    || true
           sudo mount --bind /sys      rootfs/sys     || true
           sudo mount --bind /run      rootfs/run     || true
+          sudo mount --bind /dev/pts  rootfs/dev/pts || true  # 常被遗漏，ssh 等需要
 
+          # DNS resolution (critical for apk)
           sudo mkdir -p rootfs/etc
           sudo cp -L /etc/resolv.conf rootfs/etc/resolv.conf || {
-            echo "Fallback DNS"
-            echo "nameserver 8.8.8.8" | sudo tee rootfs/etc/resolv.conf
-            echo "nameserver 1.1.1.1" | sudo tee -a rootfs/etc/resolv.conf
+            echo "Fallback: using public DNS"
+            echo "nameserver 8.8.8.8"   | sudo tee rootfs/etc/resolv.conf
+            echo "nameserver 1.1.1.1"   | sudo tee -a rootfs/etc/resolv.conf
           }
 
+          # apk repositories - use selected release (v3.23 / edge 等)
           sudo mkdir -p rootfs/etc/apk
           cat << EOF | sudo tee rootfs/etc/apk/repositories
-https://dl-cdn.alpinelinux.org/alpine/${{ inputs.alpine_release }}/main
-https://dl-cdn.alpinelinux.org/alpine/${{ inputs.alpine_release }}/community
-EOF
+          https://dl-cdn.alpinelinux.org/alpine/${{ inputs.alpine_release }}/main
+          https://dl-cdn.alpinelinux.org/alpine/${{ inputs.alpine_release }}/community
+          EOF
+
+          # Debug: show what we set up before chroot
+          ls -l rootfs/etc/resolv.conf rootfs/etc/apk/repositories || true
 
           sudo chroot rootfs /bin/sh <<'CHROOT'
+            set -e
+
+            # Update package index
             apk update
 
+            # Install essentials + openrc explicitly
             apk add --no-cache \
-              alpine-base openrc busybox-openrc \
+              alpine-base openrc \
               bash coreutils shadow sudo util-linux \
               openssh-server linux-firmware \
               e2fsprogs btrfs-progs dosfstools parted \
-              tar grep sed gawk findutils tzdata
+              tar grep sed gawk findutils tzdata \
+              busybox-openrc  # for extra init scripts if needed
 
-            export PATH=/sbin:/usr/sbin:/bin:/usr/bin
+            # Critical: ensure /sbin in PATH (rc-update is in /sbin)
+            export PATH="/sbin:/usr/sbin:/bin:/usr/bin:$PATH"
 
-            rc-update add devfs sysinit     || true
-            rc-update add bootmisc boot     || true
-            rc-update add networking default || true
-            rc-update add sshd default      || true
-            rc-update add crond default     || true
-            rc-update add syslog boot       || true
+            # Debug: confirm rc-update exists
+            which rc-update || { echo "ERROR: rc-update not found even after openrc install"; exit 1; }
+            rc-update --version || true  # should print something
 
+            # Add services using full path to be safe
+            /sbin/rc-update add devfs     sysinit || true
+            /sbin/rc-update add bootmisc  boot    || true
+            /sbin/rc-update add networking default || true
+            /sbin/rc-update add sshd      default || true
+            /sbin/rc-update add crond     default || true
+            /sbin/rc-update add syslog    boot    || true
+
+            # Users
             echo "root:alpine" | chpasswd
             adduser -D -s /bin/ash user
-            echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+            echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/user || echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
+            # Timezone & banners
             ln -sf /usr/share/zoneinfo/UTC /etc/localtime
-            echo "Alpine Linux (${{ inputs.alpine_release }}) - Amlogic TV Box" > /etc/motd
-            echo "Alpine on Amlogic" > /etc/issue
+            echo "Alpine Linux (${{ inputs.alpine_release }}) custom for Amlogic S9xxx" > /etc/motd
+            echo "Welcome to Alpine on Amlogic TV Box" > /etc/issue
 
+            # SSH minimal config
             mkdir -p /etc/ssh
             if [ ! -f /etc/ssh/sshd_config ]; then
-              echo "PermitRootLogin yes" > /etc/ssh/sshd_config
-              echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+              cat > /etc/ssh/sshd_config <<'EOF'
+              PermitRootLogin yes
+              PasswordAuthentication yes
+              PermitEmptyPasswords no
+              EOF
             fi
             sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 
+            # Optional: generate host keys if needed (openssh-server may do it)
+            /usr/bin/ssh-keygen -A || true
+
+            # Clean up
             apk cache clean
           CHROOT
 
+          # Cleanup mounts
+          sudo umount -l rootfs/dev/pts 2>/dev/null || true
           sudo umount -l rootfs/{dev,proc,sys,run} 2>/dev/null || true
-          ls -lh rootfs/etc/{apk/repositories,resolv.conf,passwd,shadow,ssh} || true  # more debug
+
+          # Final debug: check key files
+          sudo ls -lh rootfs/etc/{passwd,shadow,sudoers*,ssh/sshd_config,apk/repositories,resolv.conf,motd,issue} || true
+          sudo cat rootfs/etc/apk/repositories || true
+          sudo find rootfs/etc/init.d -type f || true  # see if services scripts exist
 
       - name: Run rebuild-alpine script
         working-directory: ${{ github.workspace }}
