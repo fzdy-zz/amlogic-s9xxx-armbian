@@ -4,7 +4,7 @@
 # Copyright (C) 2025-2026 Your Name / forked from ophub/amlogic-s9xxx-armbian
 #==========================================================================
 
-name: Build Alpine arm64 server image
+name: Build Alpine arm64 image
 
 on:
   repository_dispatch:
